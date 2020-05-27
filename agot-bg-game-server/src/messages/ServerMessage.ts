@@ -248,6 +248,7 @@ interface NewPrivateChatRoom {
     type: "new-private-chat-room";
     users: string[];
     roomId: string;
+    initiator: string;
 }
 
 interface GameSettingsChanged {
