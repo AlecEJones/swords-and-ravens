@@ -1,4 +1,4 @@
-import EntireGame from "../EntireGame";
+import EntireGame, { NotificationType } from "../EntireGame";
 import GameState from "../GameState";
 import User from "../../server/User";
 import {ClientMessage} from "../../messages/ClientMessage";
@@ -122,6 +122,14 @@ export default class LobbyGameState extends GameState<EntireGame> {
                 return;
             }
 
+            // Check password if a password is set and player has chosen a house (i.e. house != null to always allow leaving)
+            if (this.password != "" &&
+                house &&
+                this.password != message.password &&
+                !this.entireGame.isRealOwner(user)) {
+                return;
+            }
+
             this.setUserForLobbyHouse(house, user);
         } else if (message.type == "set-password") {
             let answer = v4();
@@ -166,7 +174,19 @@ export default class LobbyGameState extends GameState<EntireGame> {
             players: this.players.entries.map(([house, user]) => [house.id, user.id])
         });
 
-        this.entireGame.notifyWaitedUsers();
+        this.notifyOwnerWhenGameCanBestarted();
+    }
+
+    notifyOwnerWhenGameCanBestarted(): void {
+        if (!this.entireGame.users.has(this.entireGame.ownerUserId)) {
+            return;
+        }
+
+        const owner = this.entireGame.users.get(this.entireGame.ownerUserId);
+
+        if (this.canStartGame(owner).success) {
+            this.entireGame.notifyUsers([owner], NotificationType.READY_TO_START);
+        }
     }
 
     canStartGame(user: User): {success: boolean; reason: string} {
@@ -210,10 +230,11 @@ export default class LobbyGameState extends GameState<EntireGame> {
         }
     }
 
-    chooseHouse(house: LobbyHouse | null): void {
+    chooseHouse(house: LobbyHouse | null, password: string): void {
         this.entireGame.sendMessageToServer({
             type: "choose-house",
-            house: house ? house.id : null
+            house: house ? house.id : null,
+            password: password
         });
     }
 

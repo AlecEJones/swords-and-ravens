@@ -34,7 +34,7 @@ class RoomViewSet(CreateModelMixin, GenericViewSet):
 
 @api_view(['POST'])
 @csrf_exempt
-def notify(request, game_id):
+def notify_ready_to_start(request, game_id):
     user_ids = request.data['users']
     game = Game.objects.get(id=game_id)
     users = [User.objects.get(id=user_id) for user_id in user_ids]
@@ -44,9 +44,117 @@ def notify(request, game_id):
 
     mails = [
         (
-            f'{game.name} -  It\'s your turn!',
+            f'Your game is ready to start: {game.name}',
+            render_to_string(
+                'agotboardgame_main/ready_to_start_notification.html',
+                {'game': game, 'user': user, 'game_url': request.build_absolute_uri(reverse('play', args=[game.id]))}
+            ),
+            DEFAULT_FROM_MAIL, [user.email]
+        )
+        for user in users
+    ]
+
+    send_mass_mail(mails)
+
+    return Response({'status': 'ok'})
+
+
+@api_view(['POST'])
+@csrf_exempt
+def notify_your_turn(request, game_id):
+    user_ids = request.data['users']
+    game = Game.objects.get(id=game_id)
+    users = [User.objects.get(id=user_id) for user_id in user_ids]
+
+    # Filter users who turned off email
+    users = [user for user in users if user.email_notification_active]
+
+    mails = [
+        (
+            f'It\'s your turn in \'{game.name}\'',
             render_to_string(
                 'agotboardgame_main/mail_notification.html',
+                {'game': game, 'user': user, 'game_url': request.build_absolute_uri(reverse('play', args=[game.id]))}
+            ),
+            DEFAULT_FROM_MAIL, [user.email]
+        )
+        for user in users
+    ]
+
+    send_mass_mail(mails)
+
+    return Response({'status': 'ok'})
+
+
+@api_view(['POST'])
+@csrf_exempt
+def notify_battle_results(request, game_id):
+    user_ids = request.data['users']
+    game = Game.objects.get(id=game_id)
+    users = [User.objects.get(id=user_id) for user_id in user_ids]
+
+    # Filter users who turned off email
+    users = [user for user in users if user.email_notification_active]
+
+    mails = [
+        (
+            f'Your battle is over in \'{game.name}\'',
+            render_to_string(
+                'agotboardgame_main/battle_results_notification.html',
+                {'game': game, 'user': user, 'game_url': request.build_absolute_uri(reverse('play', args=[game.id]))}
+            ),
+            DEFAULT_FROM_MAIL, [user.email]
+        )
+        for user in users
+    ]
+
+    send_mass_mail(mails)
+
+    return Response({'status': 'ok'})
+
+
+@api_view(['POST'])
+@csrf_exempt
+def notify_new_vote(request, game_id):
+    user_ids = request.data['users']
+    game = Game.objects.get(id=game_id)
+    users = [User.objects.get(id=user_id) for user_id in user_ids]
+
+    # Filter users who turned off email
+    users = [user for user in users if user.email_notification_active]
+
+    mails = [
+        (
+            f'Your vote is needed in \'{game.name}\'',
+            render_to_string(
+                'agotboardgame_main/vote_notification.html',
+                {'game': game, 'user': user, 'game_url': request.build_absolute_uri(reverse('play', args=[game.id]))}
+            ),
+            DEFAULT_FROM_MAIL, [user.email]
+        )
+        for user in users
+    ]
+
+    send_mass_mail(mails)
+
+    return Response({'status': 'ok'})
+
+
+@api_view(['POST'])
+@csrf_exempt
+def notify_game_ended(request, game_id):
+    user_ids = request.data['users']
+    game = Game.objects.get(id=game_id)
+    users = [User.objects.get(id=user_id) for user_id in user_ids]
+
+    # Filter users who turned off email
+    users = [user for user in users if user.email_notification_active]
+
+    mails = [
+        (
+            f'Game has ended -  {game.name}',
+            render_to_string(
+                'agotboardgame_main/game_ended_notification.html',
                 {'game': game, 'user': user, 'game_url': request.build_absolute_uri(reverse('play', args=[game.id]))}
             ),
             DEFAULT_FROM_MAIL, [user.email]

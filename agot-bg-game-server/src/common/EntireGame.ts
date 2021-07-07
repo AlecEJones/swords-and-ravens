@@ -15,6 +15,13 @@ import CombatGameState from "./ingame-game-state/action-game-state/resolve-march
 import sleep from "../utils/sleep";
 import PostCombatGameState from "./ingame-game-state/action-game-state/resolve-march-order-game-state/combat-game-state/post-combat-game-state/PostCombatGameState";
 
+export enum NotificationType {
+    READY_TO_START,
+    BATTLE_RESULTS,
+    NEW_VOTE_STARTED,
+    GAME_ENDED
+}
+
 export default class EntireGame extends GameState<null, LobbyGameState | IngameGameState | CancelledGameState> {
     id: string;
     @observable users = new BetterMap<string, User>();
@@ -24,10 +31,14 @@ export default class EntireGame extends GameState<null, LobbyGameState | IngameG
     @observable gameSettings: GameSettings = { pbem: false, setupId: "base-game", playerCount: 6, randomHouses: false,
         cokWesterosPhase: false, adwdHouseCards: false, vassals: false,
         seaOrderTokens: false, randomChosenHouses: false, draftHouseCards: false, tidesOfBattle: false,
-        thematicDraft: false };
+        thematicDraft: false, endless: false };
     onSendClientMessage: (message: ClientMessage) => void;
     onSendServerMessage: (users: User[], message: ServerMessage) => void;
-    onWaitedUsers: (users: User[], forceNotification: boolean) => void;
+    onWaitedUsers: (users: User[]) => void;
+    onReadyToStart: (users: User[]) => void;
+    onNewVoteStarted: (users: User[]) => void;
+    onBattleResults: (users: User[]) => void;
+    onGameEnded: (users: User[]) => void;
     publicChatRoomId: string;
     // Keys are the two users participating in the private chat.
     // A pair of user is sorted alphabetically by their id when used as a key.
@@ -113,21 +124,48 @@ export default class EntireGame extends GameState<null, LobbyGameState | IngameG
         }
     }
 
-    notifyWaitedUsers(): void {
-        if (!this.onWaitedUsers) {
-            return;
-        }
-
-        // If game is in LobbyGameState, always notify the owner when game is ready to start or
-        // if the game is PBEM, send a notification to all waited users
-        if (this.leafState instanceof LobbyGameState || this.gameSettings.pbem) {
-            this.onWaitedUsers(this.leafState.getWaitedUsers(), this.leafState instanceof LobbyGameState);
+    notifyWaitedUsers(waitedUsers: User[] = []): void {
+        // If the game is PBEM, send a notification to all waited users
+        if (this.gameSettings.pbem && this.onWaitedUsers) {
+            if (waitedUsers.length > 0) {
+                this.onWaitedUsers(waitedUsers);
+            } else {
+                this.onWaitedUsers(this.leafState.getWaitedUsers());
+            }
         }
     }
 
-    notifyUsers(users: User[], forceNotification = false): void {
-        if ((this.gameSettings.pbem || forceNotification) && this.onWaitedUsers) {
-            this.onWaitedUsers(users, forceNotification);
+    notifyUsers(users: User[], type: NotificationType): void {
+        // Always notify on Ready to Start and Game Ended, even for live games!
+        switch (type) {
+            case NotificationType.READY_TO_START:
+                if (this.onReadyToStart) {
+                    this.onReadyToStart(users);
+                }
+                break;
+            case NotificationType.GAME_ENDED:
+                if (this.onGameEnded) {
+                    this.onGameEnded(users);
+                }
+                break;
+        }
+
+        if (!this.gameSettings.pbem) {
+            // If game is no PBEM, don't send further notifications
+            return;
+        }
+
+        switch (type) {
+            case NotificationType.NEW_VOTE_STARTED:
+                if (this.onNewVoteStarted) {
+                    this.onNewVoteStarted(users);
+                }
+                break;
+            case NotificationType.BATTLE_RESULTS:
+                if (this.onBattleResults) {
+                    this.onBattleResults(users);
+                }
+                break;
         }
     }
 
@@ -221,13 +259,13 @@ export default class EntireGame extends GameState<null, LobbyGameState | IngameG
     }
 
     async waitBeforeChangingChildGameState(parentGameState: GameState<any, any>, newChildGameState: GameState<any, any>): Promise<void> {
-        // Wait 4 seconds when CombatGameState is over to show the battle results via the CombatInfoComponent
+        // Wait 6 seconds when CombatGameState is over to show the battle results via the CombatInfoComponent
         if (this.hasChildGameState(CombatGameState) &&
                 // Only do it when there is no PostCombatGameState in the tree as PostCombat shows the dialog already
                 !this.hasChildGameState(PostCombatGameState) &&
                 !parentGameState.hasParentGameState(CombatGameState) &&
                 !newChildGameState.hasChildGameState(CombatGameState)) {
-            await sleep(5000);
+            await sleep(6000);
         }
     }
 
@@ -456,4 +494,5 @@ export interface GameSettings {
     draftHouseCards: boolean;
     tidesOfBattle: boolean;
     thematicDraft: boolean;
+    endless: boolean;
 }

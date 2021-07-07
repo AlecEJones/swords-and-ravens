@@ -1,4 +1,4 @@
-import EntireGame from "../EntireGame";
+import EntireGame, { NotificationType } from "../EntireGame";
 import GameState from "../GameState";
 import {ClientMessage} from "../../messages/ClientMessage";
 import {ServerMessage} from "../../messages/ServerMessage";
@@ -129,6 +129,20 @@ export default class IngameGameState extends GameState<
             return;
         }
 
+        if (this.game.turn != 0 && this.game.turn % 10 == 0) {
+            // Refresh Westeros deck 3 after every 10th round
+            const deck3 = this.game.westerosDecks[2];
+            deck3.forEach(wc => wc.discarded = false);
+            this.game.westerosDecks[2] = _.shuffle(deck3);
+
+            this.broadcastWesterosDecks();
+
+            // Reshuffle the wildling deck
+            this.game.wildlingDeck = _.shuffle(this.game.wildlingDeck);
+            this.game.houses.forEach(h => h.knowsNextWildlingCard = false);
+            this.entireGame.broadcastToClients({type: "hide-top-wildling-card"});
+        }
+
         this.game.turn++;
         this.log({type: "turn-begin", turn: this.game.turn});
 
@@ -246,7 +260,7 @@ export default class IngameGameState extends GameState<
             vote: vote.serializeToClient(false, null)
         });
 
-        this.entireGame.notifyUsers(_.without(this.players.keys, initiator));
+        this.entireGame.notifyUsers(_.without(this.players.keys, initiator), NotificationType.NEW_VOTE_STARTED);
 
         return vote;
     }
@@ -454,11 +468,13 @@ export default class IngameGameState extends GameState<
 
             const newPlayer = newUser ? new Player(newUser, oldPlayer.house) : null;
 
+            this.players.delete(oldPlayer.user);
+
             if (newUser && newPlayer) {
                 this.players.set(newUser, newPlayer);
-            } else {
-                this.players.delete(oldPlayer.user);
             }
+
+            this.rerender++;
         } else if (message.type == "vassal-relations") {
             this.game.vassalRelations = new BetterMap(message.vassalRelations.map(([vId, cId]) => [this.game.houses.get(vId), this.game.houses.get(cId)]));
             this.rerender++;
